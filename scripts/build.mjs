@@ -4,10 +4,12 @@
 //   2. generate the JS bindings with wasm-bindgen (--target web)
 //   3. shrink with wasm-opt if it is installed (optional)
 //   4. copy the static site from web/
+//   5. write THIRD-PARTY-NOTICES.txt for the code that ships (scripts/notices.mjs)
 import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeNotices } from './notices.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
@@ -49,5 +51,12 @@ if (has('wasm-opt')) {
 
 cpSync(join(root, 'web'), dist, { recursive: true });
 if (!existsSync(join(dist, 'index.html'))) fail('web/index.html missing');
+
+try {
+  writeNotices(root, dist);
+} catch (err) {
+  fail(err.message);
+}
+console.log('wrote dist/THIRD-PARTY-NOTICES.txt');
 
 console.log(`\ndist/ ready. overprint_bg.wasm is ${(statSync(wasmOut).size / 1024).toFixed(1)} KiB.`);

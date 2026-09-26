@@ -53,7 +53,7 @@ npm run build     # compiles Rust -> wasm, generates bindings, copies web/ -> di
 npm run serve     # preview dist/ at http://127.0.0.1:8080 (serves the production _headers too)
 ```
 
-There are no npm dependencies. `dist/` is plain static files.
+There are no npm dependencies. `dist/` is plain static files. The build also writes `dist/THIRD-PARTY-NOTICES.txt` (see *Credits and third-party notices*).
 
 ## Test
 
@@ -88,6 +88,7 @@ npm test          # cargo test, then npm run build, then node --test tests/*.tes
   - `tests/intake.test.mjs`: format sniffing, the SVG message, the 100-megapixel cap and the working-copy size
   - `tests/sizes.test.mjs`: the export sizes quoted above, and whole-pixel preview scaling
   - `tests/contrast.test.mjs`: text colours reach WCAG AA (4.5:1) in both rooms, read straight from `styles.css`
+- **Third-party notices** (`tests/notices.test.mjs`): `dist/THIRD-PARTY-NOTICES.txt` exists, the colophon links to it, it names the exact `wasm-bindgen` version from `Cargo.lock`, and every crate whose code is inside the shipped `.wasm` (read from its name section) has an entry
 
 ## Cloudflare (free tier, static only)
 
@@ -142,9 +143,17 @@ No long cache lifetime is set: `app.js`, `pkg/overprint.js` and `pkg/overprint_b
 - Render in a Web Worker; run `wasm-opt` in the build
 - Export each plate separately as a greyscale file, ready for a real press
 
-## Credits
+## Credits and third-party notices
 
 Built by Ramen Protocol with AI assistance (Claude). overprint is independent and not affiliated with any printer or ink maker. "Risograph-style" only describes the look.
+
+The `.wasm` file contains third-party code, so `npm run build` writes `dist/THIRD-PARTY-NOTICES.txt`, linked from the page's colophon. `scripts/notices.mjs` generates it from the exact versions that were compiled: licence texts come from each crate's own source in the Cargo registry, and from the Rust toolchain's own licence files. It covers:
+
+- the Rust standard library (`core`, `alloc`, `std`; MIT OR Apache-2.0, with Unicode-3.0 data tables in `core`) and `dlmalloc`, its allocator on wasm32 (MIT OR Apache-2.0)
+- `wasm-bindgen` (MIT OR Apache-2.0), plus the `pkg/overprint.js` glue that `wasm-bindgen-cli` generates
+- the crates `wasm-bindgen` pulls in for wasm32: `wasm-bindgen-shared`, `cfg-if`, `once_cell` (all MIT OR Apache-2.0) and `unicode-ident` ((MIT OR Apache-2.0) AND Unicode-3.0)
+
+Proc-macro and build-script crates (`syn`, `quote`, `proc-macro2` and others) only run on the build machine, so nothing from them ships. The Archivo and IBM Plex Mono typefaces are loaded from Google Fonts rather than shipped, and both are under the SIL Open Font License 1.1.
 
 ## License
 

@@ -791,6 +791,11 @@ input[type='range']:focus-visible {
   margin: 0;
   max-width: 70ch;
 }
+.colophon a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* ------------------------------------------------------------ drop veil */
 

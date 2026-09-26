@@ -1,0 +1,19 @@
+{
+  "name": "overprint",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Turn any photo into a two-ink risograph-style print, in your browser, in under a second.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "npm run test:rust && npm run build && npm run test:js",
+    "test:rust": "cargo test",
+    "test:js": "node --test tests/*.test.mjs",
+    "serve": "node scripts/serve.mjs",
+    "deploy": "wrangler pages deploy dist --project-name overprint"
+  }
+}

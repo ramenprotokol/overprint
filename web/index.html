@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>overprint — two-ink prints from any photo</title>
+  <meta name="description" content="Turn any photo into a two-ink risograph-style print, in your browser, in under a second. Rust compiled to WebAssembly; nothing is uploaded.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#E9E5DB" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141312" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="modulepreload" href="pkg/overprint.js">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#ticket">Skip to the job ticket</a>
+
+  <header class="masthead">
+    <h1 class="wordmark" aria-label="overprint">
+      <span class="wm wm-a" aria-hidden="true">overprint</span>
+      <span class="wm wm-b" aria-hidden="true">overprint</span>
+    </h1>
+    <p class="tagline">Turn any photo into a two-ink risograph-style print, in your browser, in under a second.</p>
+    <fieldset class="room seg" aria-label="Room lighting">
+      <label><input type="radio" name="room" value="light"><span>Light room</span></label>
+      <label><input type="radio" name="room" value="dark"><span>Darkroom</span></label>
+    </fieldset>
+  </header>
+
+  <main class="press">
+    <section class="bed" id="bed" aria-label="The print">
+      <div class="sheet" id="sheet">
+        <svg class="marks" id="marks" aria-hidden="true"></svg>
+        <canvas id="print" role="img" aria-label="Two-ink print preview"></canvas>
+        <div class="slug" id="slug" aria-hidden="true">
+          <span class="bar" id="bar"><i></i><i></i><i></i><i></i></span>
+          <span class="slug-text" id="slug-text"></span>
+          <span class="slug-job" id="slug-job"></span>
+        </div>
+      </div>
+      <p class="bed-hint">Drop a photo anywhere on the table, or paste one.</p>
+    </section>
+
+    <form class="ticket" id="ticket" aria-label="Job ticket" novalidate>
+      <div class="stub">
+        <span class="stub-title">Job ticket</span>
+        <span class="stub-seed">Seed <output id="seed-out" class="num">0417</output></span>
+      </div>
+
+      <fieldset class="row" aria-labelledby="h-source">
+        <div class="no">1</div>
+        <div class="cell wide">
+          <span class="cap" id="h-source">Source</span>
+          <div class="btns">
+            <button type="button" class="btn" id="choose">Choose a photo</button>
+            <button type="button" class="btn ghost" id="sample">Use the sample</button>
+            <input type="file" id="file" accept="image/*" hidden>
+          </div>
+          <p class="meta num" id="source-meta">—</p>
+          <p class="error" id="error" role="alert" hidden></p>
+          <p class="fine">Your photo stays on this device. Nothing is uploaded.</p>
+        </div>
+      </fieldset>
+
+      <fieldset class="row" aria-labelledby="h-inks">
+        <div class="no">2</div>
+        <div class="cell wide">
+          <span class="cap" id="h-inks">Inks</span>
+          <div class="presets" id="presets"></div>
+        </div>
+      </fieldset>
+
+      <fieldset class="row split" aria-label="Plate density">
+        <div class="no"></div>
+        <div class="cell plate">
+          <span class="cap">Plate A <span class="plate-name" id="name-a"></span></span>
+          <label class="slider">
+            <span class="sr">Plate A density</span>
+            <input type="range" id="density-a" min="40" max="160" step="5" value="100" class="ink-a">
+            <output for="density-a" class="num" id="density-a-out">100%</output>
+          </label>
+        </div>
+        <div class="cell plate">
+          <span class="cap">Plate B <span class="plate-name" id="name-b"></span></span>
+          <label class="slider">
+            <span class="sr">Plate B density</span>
+            <input type="range" id="density-b" min="40" max="160" step="5" value="100" class="ink-b">
+            <output for="density-b" class="num" id="density-b-out">100%</output>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="row" aria-labelledby="h-screen">
+        <div class="no">3</div>
+        <div class="cell wide">
+          <span class="cap" id="h-screen">Screen · dither</span>
+          <div class="seg" role="radiogroup" aria-labelledby="h-screen">
+            <label><input type="radio" name="dither" value="fs" checked><span>Floyd–Steinberg</span></label>
+            <label><input type="radio" name="dither" value="atkinson"><span>Atkinson</span></label>
+            <label><input type="radio" name="dither" value="blue"><span>Blue noise</span></label>
+          </div>
+          <span class="cap sub" id="h-dots">Dots on the long edge</span>
+          <div class="seg num" role="radiogroup" aria-labelledby="h-dots">
+            <label><input type="radio" name="dots" value="400"><span>400</span></label>
+            <label><input type="radio" name="dots" value="600" checked><span>600</span></label>
+            <label><input type="radio" name="dots" value="900"><span>900</span></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="row split" aria-labelledby="h-reg">
+        <div class="no">4</div>
+        <div class="cell">
+          <span class="cap" id="h-reg">Registration · plate B</span>
+          <label class="slider">
+            <span class="axis">X</span>
+            <input type="range" id="reg-x" min="-8" max="8" step="1" value="2" aria-label="Plate B horizontal offset in dots">
+            <output for="reg-x" class="num" id="reg-x-out">+2</output>
+          </label>
+          <label class="slider">
+            <span class="axis">Y</span>
+            <input type="range" id="reg-y" min="-8" max="8" step="1" value="-1" aria-label="Plate B vertical offset in dots">
+            <output for="reg-y" class="num" id="reg-y-out">−1</output>
+          </label>
+        </div>
+        <div class="cell narrow">
+          <span class="cap">Reset</span>
+          <button type="button" class="btn small" id="align">Align</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="row split" aria-labelledby="h-grain">
+        <div class="no">5</div>
+        <div class="cell">
+          <span class="cap" id="h-grain">Ink grain</span>
+          <label class="slider">
+            <span class="sr">Ink grain</span>
+            <input type="range" id="grain" min="0" max="100" step="1" value="35">
+            <output for="grain" class="num" id="grain-out">35</output>
+          </label>
+        </div>
+        <div class="cell narrow">
+          <span class="cap">Seed</span>
+          <button type="button" class="btn small" id="reseed">New seed</button>
+        </div>
+      </fieldset>
+
+      <fieldset class="row" aria-labelledby="h-proof">
+        <div class="no">6</div>
+        <div class="cell wide">
+          <span class="cap" id="h-proof">Proof</span>
+          <div class="seg" role="radiogroup" aria-labelledby="h-proof">
+            <label><input type="radio" name="view" value="composite" checked><span>Both plates</span></label>
+            <label><input type="radio" name="view" value="a"><span>Plate A</span></label>
+            <label><input type="radio" name="view" value="b"><span>Plate B</span></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="row" aria-labelledby="h-output">
+        <div class="no">7</div>
+        <div class="cell wide">
+          <span class="cap" id="h-output">Output</span>
+          <div class="btns">
+            <button type="button" class="btn" id="export">Export PNG</button>
+            <span class="meta num" id="export-meta"></span>
+          </div>
+          <p class="meta" id="render-meta"></p>
+          <label class="tick">
+            <input type="checkbox" id="race">
+            <span>Race plain JavaScript</span>
+          </label>
+          <div class="race" id="race-panel" hidden aria-live="polite">
+            <table>
+              <caption class="sr">Median render time for this job on this device</caption>
+              <thead><tr><th scope="col">Engine</th><th scope="col">Median</th><th scope="col">Runs</th></tr></thead>
+              <tbody>
+                <tr><th scope="row">Rust → WebAssembly</th><td class="num" id="t-wasm">…</td><td class="num" id="n-wasm">…</td></tr>
+                <tr><th scope="row">Plain JavaScript</th><td class="num" id="t-js">…</td><td class="num" id="n-js">…</td></tr>
+              </tbody>
+            </table>
+            <p class="verdict" id="verdict">Measuring…</p>
+            <p class="fine" id="identical"></p>
+            <p class="fine">Measured just now in this browser: same photo, same settings, run alternately. Timings depend on your device, browser and whatever else it is doing.</p>
+          </div>
+        </div>
+      </fieldset>
+    </form>
+  </main>
+
+  <footer class="colophon">
+    <p>overprint is an independent tool, not affiliated with any printer or ink maker. “Risograph-style” describes the look. Ink colours are on-screen approximations.</p>
+    <p>Separation, dithering, registration and grain run in Rust compiled to WebAssembly. Same photo and settings give the same print, byte for byte. Built by Ramen Protocol with AI assistance (Claude). MIT licence.</p>
+  </footer>
+
+  <div class="veil" id="veil" hidden><p>Drop to print</p></div>
+</body>
+</html>

@@ -2,6 +2,8 @@
 name = "overprint"
 version = "0.1.0"
 edition = "2021"
+# slice::as_chunks is stable from 1.88.
+rust-version = "1.88"
 description = "Two-ink risograph-style separation, dithering, mis-registration and grain, compiled to WebAssembly."
 license = "MIT"
 publish = false

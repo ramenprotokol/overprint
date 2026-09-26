@@ -1,14 +1,22 @@
 // End-to-end smoke test in real headless Chrome, against dist/ served with
 // the production _headers (including the Content-Security-Policy).
-// Skips cleanly when Chrome is not installed (set CHROME_PATH to point at one).
+// Skips when Chrome is not installed (set CHROME_PATH to point at one), unless
+// REQUIRE_BROWSER=1 is set, in which case a missing Chrome fails the run.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from '../scripts/serve.mjs';
 import { dist } from './helpers.mjs';
-import { findChrome, launchChrome } from './cdp.mjs';
+import { browserPlan, findChrome, launchChrome } from './cdp.mjs';
 
 const chromePath = findChrome();
-const skip = chromePath ? false : 'Chrome not found; set CHROME_PATH to run the browser smoke test';
+const plan = browserPlan(chromePath);
+// With REQUIRE_BROWSER=1 and no Chrome, the smoke test itself is skipped and a
+// separate test fails loudly instead.
+const skip = plan.run ? false : plan.skip ?? plan.fail;
+
+if (plan.fail) {
+  test('browser smoke test can run', () => assert.fail(plan.fail));
+}
 
 // Web fonts come from a third party; if the machine is offline that is not an app error.
 const appProblems = (list) => list.filter((p) => !/fonts\.(googleapis|gstatic)\.com/.test(`${p.text} ${p.url ?? ''}`));

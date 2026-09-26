@@ -1,5 +1,6 @@
-# Cloudflare Pages (static only). Build first with `npm run build`, then:
-#   npx wrangler pages deploy dist --project-name overprint
+# Cloudflare Pages (static only). Build first with `npm run build`, then
+# upload dist/ (see the README). Deliberately no account_id here: the account
+# comes from whoever runs the deploy.
 name = "overprint"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-09-25"

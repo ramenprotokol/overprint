@@ -42,3 +42,11 @@ test('production headers allow WebAssembly under a strict CSP', () => {
   assert.match(headers, /script-src 'self' 'wasm-unsafe-eval'/);
   assert.doesNotMatch(headers, /unsafe-inline/);
 });
+
+test('no long cache lifetime on the unhashed JS and WebAssembly files', () => {
+  // app.js, pkg/overprint.js and pkg/overprint_bg.wasm keep fixed names, so a
+  // max-age could pair a new app.js with a stale engine after a redeploy.
+  const headers = read('_headers');
+  assert.doesNotMatch(headers, /max-age\s*=\s*[1-9]/);
+  assert.doesNotMatch(headers, /immutable/);
+});

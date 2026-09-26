@@ -7,17 +7,29 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export function findChrome() {
+// An explicit CHROME_PATH wins; if it points at nothing, there is no Chrome
+// (rather than quietly falling back to another one).
+export function findChrome(env = process.env) {
+  if (env.CHROME_PATH) return existsSync(env.CHROME_PATH) ? env.CHROME_PATH : null;
   const candidates = [
-    process.env.CHROME_PATH,
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Chromium.app/Contents/MacOS/Chromium',
     '/usr/bin/google-chrome',
     '/usr/bin/google-chrome-stable',
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
-  ].filter(Boolean);
+  ];
   return candidates.find((p) => existsSync(p)) ?? null;
+}
+
+// Whether the browser smoke test runs, skips or fails. Locally a missing
+// Chrome is a skip; with REQUIRE_BROWSER=1 (set it in CI) it is a failure.
+export function browserPlan(chromePath, env = process.env) {
+  if (chromePath) return { run: true };
+  if (env.REQUIRE_BROWSER === '1') {
+    return { fail: 'REQUIRE_BROWSER=1 is set but Chrome was not found. Install Chrome or set CHROME_PATH.' };
+  }
+  return { skip: 'Chrome not found; set CHROME_PATH to run the browser smoke test (REQUIRE_BROWSER=1 makes this a failure)' };
 }
 
 export async function launchChrome(chromePath) {

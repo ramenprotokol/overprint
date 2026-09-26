@@ -21,12 +21,21 @@ if (plan.fail) {
 // Web fonts come from a third party; if the machine is offline that is not an app error.
 const appProblems = (list) => list.filter((p) => !/fonts\.(googleapis|gstatic)\.com/.test(`${p.text} ${p.url ?? ''}`));
 
+// body is a string, or an array of byte values.
 const DROP = (name, body, type) => `(() => {
   const dt = new DataTransfer();
-  dt.items.add(new File([${JSON.stringify(body)}], ${JSON.stringify(name)}, { type: ${JSON.stringify(type)} }));
+  const body = ${JSON.stringify(body)};
+  const part = typeof body === 'string' ? body : new Uint8Array(body);
+  dt.items.add(new File([part], ${JSON.stringify(name)}, { type: ${JSON.stringify(type)} }));
   window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, cancelable: true }));
   return true;
 })()`;
+
+// A PNG header claiming 20,000 × 10,000 px (200 megapixels) and nothing else.
+const HUGE_PNG = [0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
+  0, 0, 0x4e, 0x20, 0, 0, 0x27, 0x10, 8, 6, 0, 0, 0];
+const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>';
+const errorText = "document.getElementById('error').textContent";
 
 test('dist/ loads in headless Chrome, renders with WebAssembly, and survives bad input', { skip, timeout: 120000 }, async () => {
   const server = await serve(dist);
@@ -37,6 +46,18 @@ test('dist/ loads in headless Chrome, renders with WebAssembly, and survives bad
     await page.navigate(url);
     await page.waitFor("document.documentElement.dataset.state === 'rendered'");
     assert.equal(await page.evaluate('document.documentElement.dataset.engine'), 'wasm');
+
+    // First view: the sample poster at 400 dots, drawn at whole device pixels per dot.
+    const first = await page.evaluate(`(() => {
+      const c = document.getElementById('print');
+      return { w: c.width, h: c.height, css: c.getBoundingClientRect().width, preview: document.documentElement.dataset.preview,
+        meta: document.getElementById('source-meta').textContent, out: document.getElementById('export-meta').textContent };
+    })()`);
+    assert.equal(first.w, 400);
+    assert.match(first.meta, /Sample poster/);
+    assert.equal(first.preview, '2', 'a 1280 × 800 window shows each dot as 2 × 2 pixels');
+    assert.equal(first.css, 800);
+    assert.equal(first.out, `2400 × ${first.h * 6} px`);
 
     const inked = await page.evaluate(`(() => {
       const c = document.getElementById('print');
@@ -57,8 +78,16 @@ test('dist/ loads in headless Chrome, renders with WebAssembly, and survives bad
     await page.waitFor("!document.getElementById('error').hidden");
     assert.match(await page.evaluate("document.getElementById('error').textContent"), /isn’t an image/);
     await page.evaluate(DROP('broken.png', 'this is not a png', 'image/png'));
-    await page.waitFor("document.getElementById('error').textContent.includes('couldn’t open')");
+    await page.waitFor(`${errorText}.includes('couldn’t open')`);
+    assert.doesNotMatch(await page.evaluate(errorText), /HEIC/);
+    await page.evaluate(DROP('logo.svg', SVG, 'image/svg+xml'));
+    await page.waitFor(`${errorText}.includes('SVG')`);
+    assert.match(await page.evaluate(errorText), /isn’t supported\. Use a photo \(JPEG, PNG or WebP\)/);
+    await page.evaluate(DROP('scan.png', HUGE_PNG, 'image/png'));
+    await page.waitFor(`${errorText}.includes('megapixels')`);
+    assert.match(await page.evaluate(errorText), /20,000 × 10,000 px \(200 megapixels\)/);
     assert.equal(await page.evaluate('document.documentElement.dataset.state'), 'rendered');
+    assert.match(await page.evaluate("document.getElementById('source-meta').textContent"), /Sample poster/, 'the print stays');
 
     assert.equal(await page.evaluate('document.documentElement.dataset.errors'), '0');
     assert.deepEqual(appProblems(page.problems), []);

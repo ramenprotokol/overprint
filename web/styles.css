@@ -7,15 +7,18 @@
   --table: #e9e5db;
   --sheet: #f4f0e6;
   --key: #1e1d1b;
-  --muted: #6f6a61;
+  --muted: #5d5850;
   --hair: rgba(30, 29, 27, 0.88);
   --hair-soft: rgba(30, 29, 27, 0.2);
   --on-sheet: #1e1d1b;
-  --on-sheet-muted: #7a746a;
+  --on-sheet-muted: #66615a;
   --shadow: 0 1px 1px rgba(30, 29, 27, 0.1), 0 3px 8px -2px rgba(30, 29, 27, 0.12),
     0 18px 36px -18px rgba(30, 29, 27, 0.5);
   --shadow-sm: 0 1px 1px rgba(30, 29, 27, 0.12), 0 6px 14px -8px rgba(30, 29, 27, 0.4);
-  --pool: transparent;
+  --pool: none;
+  --ticket-bg: none;
+  --lamp: rgba(30, 29, 27, 0.28);
+  --lamp-glow: none;
   --ink-a: #ff48b0;
   --ink-b: #0078bf;
   --ink-ab: #002488;
@@ -25,36 +28,61 @@
   --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   /* Uncoated paper: fine fibre specks + slow cloudy mottling, both procedural. */
   --tex-fine: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .16 0 0 0 0 .14 0 0 0 0 .11 0 0 0 1.25 -.62'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
-  --tex-cloud: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='700'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .012' numOctaves='4' seed='9' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .27 0 0 0 0 .22 0 0 0 .5 -.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
+  --tex-cloud: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='700' height='700'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.008 .012' numOctaves='4' seed='9' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .3 0 0 0 0 .27 0 0 0 0 .22 0 0 0 .3 -.12'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
   --tex-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .9 0 0 0 0 .88 0 0 0 0 .84 0 0 0 .75 -.48'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
   --table-tex: var(--tex-fine), var(--tex-cloud);
   color-scheme: light;
 }
 
-/* Darkroom: a dark table, the same off-white sheet. */
+/* Darkroom: a dark table under a red safelight, the same off-white sheet.
+   (Keep the two blocks below identical; tests/contrast.test.mjs checks.) */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --table: #141312;
-    --key: #e4ded2;
-    --muted: #938d82;
-    --hair: rgba(228, 222, 210, 0.78);
-    --hair-soft: rgba(228, 222, 210, 0.18);
-    --shadow: 0 1px 1px rgba(0, 0, 0, 0.6), 0 6px 14px -4px rgba(0, 0, 0, 0.6), 0 30px 60px -20px rgba(0, 0, 0, 0.95);
-    --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.6), 0 10px 20px -8px rgba(0, 0, 0, 0.9);
-    --pool: radial-gradient(ellipse 55% 60% at 36% 52%, rgba(255, 248, 236, 0.075), transparent 72%);
+    --table: #120d0c;
+    --key: #f3e2d3;
+    --muted: #d8bfae;
+    --hair: rgba(243, 206, 184, 0.62);
+    --hair-soft: rgba(243, 206, 184, 0.16);
+    --shadow: 0 1px 1px rgba(0, 0, 0, 0.6), 0 6px 14px -4px rgba(0, 0, 0, 0.6), 0 30px 60px -20px rgba(0, 0, 0, 0.95),
+      0 0 0 1px rgba(255, 80, 50, 0.08), 0 0 120px -18px rgba(222, 36, 14, 0.5);
+    --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.6), 0 10px 20px -8px rgba(0, 0, 0, 0.9), 0 0 40px -12px rgba(214, 44, 22, 0.5);
+    /* The safelight: a deep red lamp above the ticket, plus a faint amber spill
+       over the bed. The sheet itself keeps its off-white paper colour. */
+    --glow: rgba(222, 30, 12, 0.42);
+    --glow-bed: rgba(214, 30, 12, 0.2);
+    --glow-amber: rgba(255, 132, 48, 0.07);
+    --ticket-tint: rgba(214, 56, 28, 0.08);
+    --pool: radial-gradient(ellipse 70% 100% at 96% -12%, var(--glow), rgba(222, 30, 12, 0.12) 50%, transparent 80%),
+      radial-gradient(ellipse 56% 48% at 36% -8%, var(--glow-bed), transparent 76%),
+      radial-gradient(ellipse 58% 60% at 34% 56%, var(--glow-amber), transparent 72%);
+    --ticket-bg: linear-gradient(180deg, var(--ticket-tint), rgba(214, 56, 28, 0.02) 70%);
+    --lamp: #ff4a26;
+    --lamp-glow: 0 0 5px 1px rgba(255, 74, 38, 0.85), 0 0 14px 3px rgba(255, 60, 30, 0.35);
     --table-tex: var(--tex-light);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --table: #141312;
-  --key: #e4ded2;
-  --muted: #938d82;
-  --hair: rgba(228, 222, 210, 0.78);
-  --hair-soft: rgba(228, 222, 210, 0.18);
-  --shadow: 0 1px 1px rgba(0, 0, 0, 0.6), 0 6px 14px -4px rgba(0, 0, 0, 0.6), 0 30px 60px -20px rgba(0, 0, 0, 0.95);
-  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.6), 0 10px 20px -8px rgba(0, 0, 0, 0.9);
-  --pool: radial-gradient(ellipse 55% 60% at 36% 52%, rgba(255, 248, 236, 0.075), transparent 72%);
+  --table: #120d0c;
+  --key: #f3e2d3;
+  --muted: #d8bfae;
+  --hair: rgba(243, 206, 184, 0.62);
+  --hair-soft: rgba(243, 206, 184, 0.16);
+  --shadow: 0 1px 1px rgba(0, 0, 0, 0.6), 0 6px 14px -4px rgba(0, 0, 0, 0.6), 0 30px 60px -20px rgba(0, 0, 0, 0.95),
+    0 0 0 1px rgba(255, 80, 50, 0.08), 0 0 120px -18px rgba(222, 36, 14, 0.5);
+  --shadow-sm: 0 1px 1px rgba(0, 0, 0, 0.6), 0 10px 20px -8px rgba(0, 0, 0, 0.9), 0 0 40px -12px rgba(214, 44, 22, 0.5);
+  /* The safelight: a deep red lamp above the ticket, plus a faint amber spill
+     over the bed. The sheet itself keeps its off-white paper colour. */
+  --glow: rgba(222, 30, 12, 0.42);
+  --glow-bed: rgba(214, 30, 12, 0.2);
+  --glow-amber: rgba(255, 132, 48, 0.07);
+  --ticket-tint: rgba(214, 56, 28, 0.08);
+  --pool: radial-gradient(ellipse 70% 100% at 96% -12%, var(--glow), rgba(222, 30, 12, 0.12) 50%, transparent 80%),
+    radial-gradient(ellipse 56% 48% at 36% -8%, var(--glow-bed), transparent 76%),
+    radial-gradient(ellipse 58% 60% at 34% 56%, var(--glow-amber), transparent 72%);
+  --ticket-bg: linear-gradient(180deg, var(--ticket-tint), rgba(214, 56, 28, 0.02) 70%);
+  --lamp: #ff4a26;
+  --lamp-glow: 0 0 5px 1px rgba(255, 74, 38, 0.85), 0 0 14px 3px rgba(255, 60, 30, 0.35);
   --table-tex: var(--tex-light);
   color-scheme: dark;
 }
@@ -123,7 +151,7 @@ output {
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 22px;
-  padding: 18px 28px 14px;
+  padding: 18px 24px 14px;
 }
 
 .wordmark {
@@ -228,15 +256,27 @@ output {
   letter-spacing: 0.12em;
   font-stretch: 78%;
 }
+/* the safelight lamp: dark in the light room, glowing red in the darkroom */
+.room label:last-child span::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 7px 1px 0;
+  border-radius: 50%;
+  background: var(--lamp);
+  box-shadow: var(--lamp-glow);
+  vertical-align: middle;
+}
 
 /* ------------------------------------------------------------ the press */
 
 .press {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 368px;
-  gap: 28px;
+  grid-template-columns: minmax(0, 1fr) 352px;
+  gap: 24px;
   align-items: start;
-  padding: 0 28px 24px;
+  padding: 0 24px 24px;
 }
 
 .bed {
@@ -362,6 +402,7 @@ output {
 
 .ticket {
   border: 1px solid var(--hair);
+  background: var(--ticket-bg);
   font-size: 12px;
   min-width: 0;
 }
@@ -737,9 +778,9 @@ input[type='range']:focus-visible {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px 28px;
-  padding: 16px 28px 26px;
+  padding: 16px 24px 26px;
   border-top: 1px solid var(--hair-soft);
-  margin: 0 28px;
+  margin: 0 24px;
   padding-left: 0;
   padding-right: 0;
   font-size: 11px;

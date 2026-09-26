@@ -1,112 +1,105 @@
-// The built-in sample: a still life (three spheres on a striped cloth)
-// painted procedurally, pixel by pixel. No photograph, no copyright.
+// The built-in sample: a bold two-colour poster, drawn in code. No
+// photograph, no copyright.
 //
-// It only has to look like a photo; the print pipeline's determinism does
-// not depend on it.
+// It is designed the way a stencil-print poster is: as two plates. Each shape
+// says how much of ink A and ink B it wants (flat solids, a few flat tints and
+// one gradient), and the poster is then painted in the current ink pair, so it
+// separates cleanly whichever inks are chosen. Big flat shapes make the grain,
+// the overprint and the mis-registration easy to see at a glance.
+//
+// paintPoster() is pure (no DOM), so it can be checked in Node.
 
-const W = 1200;
-const H = 900;
-const HORIZON = 600;
+export const SAMPLE_W = 900;
+export const SAMPLE_H = 600;
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const smooth = (e0, e1, v) => {
-  const t = clamp01((v - e0) / (e1 - e0));
-  return t * t * (3 - 2 * t);
-};
-const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+/** Anti-aliased coverage from a signed distance in pixels (positive = inside). */
+const edge = (d) => clamp01(d + 0.5);
 
-// Far to near, so nearer spheres paint over farther ones.
-const SPHERES = [
-  { x: 790, y: 452, r: 150, rgb: [236, 196, 70] }, // lemon
-  { x: 430, y: 520, r: 205, rgb: [226, 104, 118] }, // coral
-  { x: 948, y: 648, r: 98, rgb: [66, 108, 186] }, // blue
+const SUN = { x: 676, y: 256, r: 156 };
+const DISC = { x: 454, y: 340, r: 128 };
+const HORIZON = 432;
+const RAYS = 18;
+
+// "Type": a three-line headline and a few lines of body copy, as solid bars.
+const HEADLINE = [
+  [46, 44, 262, 40],
+  [46, 96, 196, 40],
+  [46, 148, 236, 40],
 ];
-const LIGHT = (() => {
-  const v = [-0.55, -0.62, 0.56];
-  const n = Math.hypot(...v);
-  return v.map((c) => c / n);
-})();
-const HALF = (() => {
-  const v = [LIGHT[0], LIGHT[1], LIGHT[2] + 1];
-  const n = Math.hypot(...v);
-  return v.map((c) => c / n);
-})();
+const BODY = [
+  [48, 214, 170, 8],
+  [48, 230, 150, 8],
+  [48, 246, 176, 8],
+  [48, 262, 118, 8],
+];
 
-function background(x, y) {
-  if (y < HORIZON) {
-    // Wall: warm window light from the upper left, falling off to the right.
-    const d = Math.hypot((x - 180) / W, (y - 60) / H);
-    const wall = mix([252, 250, 245], [186, 180, 172], smooth(0.12, 1.15, d));
-    // Soft shadow line where wall meets table.
-    return mix(wall, [120, 110, 100], smooth(HORIZON - 70, HORIZON, y) * 0.35);
-  }
-  // Table cloth in perspective: stripes converge towards the vanishing point.
-  const depth = (y - HORIZON) / (H - HORIZON); // 0 far .. 1 near
-  const u = (x - W * 0.52) / (0.35 + 0.65 * depth);
-  const stripe = smooth(0.35, 0.5, Math.abs(((u / 46) % 2 + 2) % 2 - 1));
-  const cloth = mix([246, 243, 236], [88, 120, 150], stripe * 0.9);
-  const lit = 0.78 + 0.22 * (1 - Math.hypot((x - 300) / W, (y - HORIZON) / (H - HORIZON)) * 0.7);
-  return cloth.map((c) => c * lit);
+function inRect(x, y, [rx, ry, rw, rh]) {
+  const d = Math.min(x - rx, rx + rw - x, y - ry, ry + rh - y);
+  return edge(d);
+}
+const inCircle = (x, y, c) => edge(c.r - Math.hypot(x - c.x, y - c.y));
+const backHill = (x) => HORIZON + 22 * Math.sin(x / 96 + 0.4) + 12 * Math.sin(x / 41);
+const frontHill = (x) => 506 + 26 * Math.sin(x / 120 + 2.2) + 9 * Math.sin(x / 53 + 1);
+
+/** Coverage of ink A and ink B (0..1) at pixel centre (x, y). */
+export function plates(x, y) {
+  const sun = inCircle(x, y, SUN);
+  const disc = inCircle(x, y, DISC);
+  const back = edge(y - backHill(x));
+  const front = edge(y - frontHill(x));
+  let head = 0;
+  for (const r of HEADLINE) head = Math.max(head, inRect(x, y, r));
+  let body = 0;
+  for (const r of BODY) body = Math.max(body, inRect(x, y, r));
+
+  // Sky: a flat gradient tint of ink B, darker towards the horizon.
+  const sky = 0.1 + 0.26 * clamp01(y / HORIZON);
+  // Sun rays: alternate wedges of a light ink-A tint, fading out before the headline.
+  const dist = Math.hypot(x - SUN.x, y - SUN.y);
+  const wedge = Math.cos(Math.atan2(y - SUN.y, x - SUN.x) * RAYS) > 0.25 ? 1 : 0;
+  const rays = wedge * 0.26 * edge(dist - SUN.r - 14) * clamp01((390 - dist) / 70) * (1 - disc);
+
+  let a = Math.max(rays * (1 - back), sun * (1 - back));
+  a = Math.max(a, 0.58 * back * (1 - front));
+  a = Math.max(a, head, body);
+
+  let b = sky * (1 - back) * (1 - sun);
+  b = Math.max(b, disc * (1 - back));
+  b = Math.max(b, front);
+  b = Math.max(b, head);
+  return [a, b];
 }
 
-function shadowAt(x, y) {
-  let s = 0;
-  for (const b of SPHERES) {
-    const cx = b.x + b.r * 0.55;
-    const cy = b.y + b.r * 0.94;
-    const dx = (x - cx) / (b.r * 1.25);
-    const dy = (y - cy) / (b.r * 0.3);
-    const d = Math.hypot(dx, dy);
-    s = Math.max(s, (1 - smooth(0.25, 1.05, d)) * 0.62);
-  }
-  return s;
-}
-
-function sphereAt(b, x, y) {
-  const nx = (x - b.x) / b.r;
-  const ny = (y - b.y) / b.r;
-  const q = nx * nx + ny * ny;
-  if (q > 1) return null;
-  const nz = Math.sqrt(1 - q);
-  const diff = Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
-  const spec = Math.pow(Math.max(0, nx * HALF[0] + ny * HALF[1] + nz * HALF[2]), 48) * 0.85;
-  // A little bounce light from the cloth on the underside.
-  const bounce = Math.max(0, ny) * 0.12;
-  const k = 0.16 + 0.9 * diff + bounce;
-  const edge = smooth(0.985, 1, q); // anti-alias the rim
-  return { rgb: b.rgb.map((c) => c * k + 255 * spec), edge };
-}
-
-/** Paint the still life into a new canvas. */
-export function makeSample() {
-  const canvas = document.createElement('canvas');
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  const img = ctx.createImageData(W, H);
-  const d = img.data;
-  let seed = 0x2f6b1d3;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      let c = background(x, y);
-      if (y >= HORIZON - 4) {
-        const s = shadowAt(x, y);
-        c = c.map((v) => v * (1 - s));
-      }
-      for (const b of SPHERES) {
-        const hit = sphereAt(b, x, y);
-        if (hit) c = mix(hit.rgb, c, hit.edge);
-      }
-      // Film-like grain so smooth areas do not band.
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      const g = ((seed >>> 24) - 128) / 32;
-      const o = (y * W + x) * 4;
-      d[o] = c[0] + g;
-      d[o + 1] = c[1] + g;
-      d[o + 2] = c[2] + g;
-      d[o + 3] = 255;
+/**
+ * Paint the poster in inks A and B (sRGB triples) as RGBA pixels. Colours are
+ * mixed in "absorption" (255 - value), the same model the separation uses.
+ */
+export function paintPoster(inkA, inkB, w = SAMPLE_W, h = SAMPLE_H) {
+  const px = new Uint8ClampedArray(w * h * 4);
+  const aa = inkA.map((v) => 255 - v);
+  const ab = inkB.map((v) => 255 - v);
+  const sx = SAMPLE_W / w;
+  const sy = SAMPLE_H / h;
+  let o = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const [ca, cb] = plates((x + 0.5) * sx, (y + 0.5) * sy);
+      px[o++] = 255 - (ca * aa[0] + cb * ab[0]);
+      px[o++] = 255 - (ca * aa[1] + cb * ab[1]);
+      px[o++] = 255 - (ca * aa[2] + cb * ab[2]);
+      px[o++] = 255;
     }
   }
-  ctx.putImageData(img, 0, 0);
+  return px;
+}
+
+/** The poster as a canvas, painted in the given ink pair. */
+export function makeSample(inkA, inkB) {
+  const canvas = document.createElement('canvas');
+  canvas.width = SAMPLE_W;
+  canvas.height = SAMPLE_H;
+  const ctx = canvas.getContext('2d');
+  ctx.putImageData(new ImageData(paintPoster(inkA, inkB), SAMPLE_W, SAMPLE_H), 0, 0);
   return canvas;
 }

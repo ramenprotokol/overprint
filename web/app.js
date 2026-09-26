@@ -3,20 +3,20 @@
 // as a clearly labelled fallback if WebAssembly cannot load.
 import init, { render as wasmRender, prepare } from './pkg/overprint.js';
 import * as ref from './reference.js';
-import { PRESETS, PAPER, encodeParams, toHex } from './params.js';
+import { PRESETS, PAPER, encodeParams, toHex, exportSize, fitPreview } from './params.js';
 import { makeSample } from './sample.js';
+import { HEAD_BYTES, precheck, sniffImage, pixelProblem, decodeFailure, workingSize } from './intake.js';
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
 const RUNS = 7;
-const EXPORT_LONG_EDGE = 2400;
 const MINUS = '−';
 
 const DITHER_NAMES = { fs: 'Floyd–Steinberg', atkinson: 'Atkinson', blue: 'Blue noise' };
 const state = {
   preset: 'pink-blue',
   dither: 'fs',
-  dots: 600,
+  dots: 400,
   regX: 2,
   regY: -1,
   grain: 35,
@@ -27,12 +27,13 @@ const state = {
 };
 
 let engine = null; // { kind: 'wasm' | 'js', render }
-let source = null; // { image, width, height, label }
+let source = null; // { image: canvas (long edge ≤ 900), width, height (as decoded), label, kind }
 let input = null; // { data, w, h, dots, source }
 let last = null; // { w, h, ms }
 let pending = false;
 let raceToken = 0;
 let raceTimer = 0;
+let loadToken = 0;
 
 root.dataset.state = 'loading';
 root.dataset.errors = '0';
@@ -153,7 +154,10 @@ function bindTicket() {
       r.addEventListener('change', () => {
         if (!r.checked) return;
         state[key] = cast(r.value);
-        if (key === 'preset') syncInks();
+        if (key === 'preset') {
+          syncInks();
+          if (source?.kind === 'sample') useSample({ feed: false });
+        }
         if (key === 'dots') input = null;
         schedule();
       });
@@ -208,13 +212,13 @@ function bindTicket() {
 
 // ----------------------------------------------------------------- sources
 
-function setSource(src) {
+function setSource(src, { feed = true } = {}) {
   source = src;
   input = null;
   $('source-meta').textContent = `${src.label} · ${src.width} × ${src.height} px`;
   $('source-meta').title = src.label;
   const sheet = $('sheet');
-  if (!reducedMotion()) {
+  if (feed && !reducedMotion()) {
     sheet.classList.remove('feed');
     void sheet.offsetWidth;
     sheet.classList.add('feed');
@@ -222,40 +226,64 @@ function setSource(src) {
   schedule();
 }
 
-function useSample() {
+// The sample poster is drawn as two plates and painted in the current inks,
+// so it is repainted when the ink pair changes.
+function useSample({ feed = true } = {}) {
+  loadToken++;
   clearError();
-  const canvas = makeSample();
-  setSource({ image: canvas, width: canvas.width, height: canvas.height, label: 'Sample still life, drawn in code' });
+  const p = PRESETS[state.preset];
+  const canvas = makeSample(p.a.rgb, p.b.rgb);
+  setSource({ image: canvas, width: canvas.width, height: canvas.height, label: 'Sample poster, drawn in code', kind: 'sample' }, { feed });
+}
+
+// Draw the decoded photo once into a working canvas no bigger than the
+// largest dot count, then release the full-size decode.
+function workingCopy(bitmap) {
+  const { width, height } = workingSize(bitmap.width, bitmap.height);
+  const c = document.createElement('canvas');
+  c.width = width;
+  c.height = height;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  bitmap.close();
+  return c;
 }
 
 async function loadFile(file) {
   clearError();
   if (!file) return;
-  const name = file.name && file.name.length > 40 ? file.name.slice(0, 37) + '…' : file.name || 'That file';
-  if (file.type && !file.type.startsWith('image/')) {
-    showError(`“${name}” isn’t an image. Choose a JPG, PNG, WebP or GIF.`);
-    return;
-  }
-  if (file.size > 80 * 1024 * 1024) {
-    showError(`“${name}” is over 80 MB. Choose a smaller image.`);
+  const token = ++loadToken;
+  let head = new Uint8Array(0);
+  try {
+    head = new Uint8Array(await file.slice(0, HEAD_BYTES).arrayBuffer());
+  } catch { /* unreadable: the decode below reports it */ }
+  const problem = precheck(file, head);
+  if (problem) {
+    showError(problem);
     return;
   }
   let bitmap;
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    showError(`This browser couldn’t open “${name}”. It may be damaged, or in a format such as HEIC that the browser can’t read. Try a JPG or PNG.`);
+    if (token === loadToken) showError(decodeFailure(file.name, sniffImage(head).format));
     return;
   }
-  if (!bitmap.width || !bitmap.height) {
-    showError(`“${name}” has no pixels to print.`);
+  const { width, height } = bitmap;
+  const tooBig = pixelProblem(file.name, width, height);
+  if (tooBig || token !== loadToken) {
+    bitmap.close();
+    if (tooBig && token === loadToken) showError(tooBig);
     return;
   }
-  setSource({ image: bitmap, width: bitmap.width, height: bitmap.height, label: file.name || 'Pasted image' });
+  setSource({ image: workingCopy(bitmap), width, height, label: file.name || 'Pasted image', kind: 'photo' });
 }
 
 function prepareInput() {
   if (input && input.source === source && input.dots === state.dots) return input;
+  // Output size comes from the photo's own proportions; pixels come from the working copy.
   const scale = state.dots / Math.max(source.width, source.height);
   const w = Math.max(1, Math.round(source.width * scale));
   const h = Math.max(1, Math.round(source.height * scale));
@@ -318,8 +346,8 @@ function describe() {
   const c = inkColours();
   const who = engine.kind === 'wasm' ? 'Rust → WebAssembly' : 'plain JavaScript (WebAssembly didn’t load)';
   $('render-meta').textContent = `This print: ${ms(last.ms)} in ${who}, one run on this device.`;
-  const k = Math.max(1, Math.floor(EXPORT_LONG_EDGE / Math.max(last.w, last.h)));
-  $('export-meta').textContent = `${last.w * k} × ${last.h * k} px`;
+  const out = exportSize(last.w, last.h);
+  $('export-meta').textContent = `${out.width} × ${out.height} px`;
   const view = state.view === 'a' ? ' · proof A' : state.view === 'b' ? ' · proof B' : '';
   $('slug-text').textContent = `${c.p.a.name} / ${c.p.b.name} · ${DITHER_NAMES[state.dither]} · ${last.w}×${last.h} dots · ${ms(last.ms)}${view}`;
   $('slug-job').textContent = `overprint ${pad4(state.seed)}`;
@@ -339,10 +367,8 @@ function layout() {
   const wide = matchMedia('(min-width: 960px)').matches;
   const bw = bed.clientWidth;
   const bh = wide ? bed.clientHeight - 36 : Math.round(innerHeight * 0.78);
-  const m = Math.round(Math.min(52, Math.max(24, Math.min(bw, bh) * 0.07)));
-  const scale = Math.min((bw - 2 * m) / last.w, (bh - 2 * m) / last.h);
-  const iw = Math.max(40, Math.floor(last.w * scale));
-  const ih = Math.max(30, Math.floor(last.h * scale));
+  // Whole device pixels per dot where possible, so the grain is crisp.
+  const { iw, ih, m, perDot, whole } = fitPreview(bw, bh, last.w, last.h, devicePixelRatio || 1);
   const sw = iw + 2 * m;
   const sh = ih + 2 * m;
   sheet.style.width = `${sw}px`;
@@ -350,7 +376,8 @@ function layout() {
   sheet.style.setProperty('--m', `${m}px`);
   canvas.style.width = `${iw}px`;
   canvas.style.height = `${ih}px`;
-  canvas.classList.toggle('crisp', iw * devicePixelRatio >= last.w);
+  canvas.classList.toggle('crisp', perDot >= 1);
+  root.dataset.preview = whole ? `${perDot}` : 'fit';
   drawMarks(sw, sh, m, iw / last.w);
 }
 
@@ -393,10 +420,10 @@ function drawMarks(W, H, m, dotPx) {
 function exportPng() {
   if (!last) return;
   const src = $('print');
-  const k = Math.max(1, Math.floor(EXPORT_LONG_EDGE / Math.max(last.w, last.h)));
+  const out = exportSize(last.w, last.h);
   const c = document.createElement('canvas');
-  c.width = last.w * k;
-  c.height = last.h * k;
+  c.width = out.width;
+  c.height = out.height;
   const ctx = c.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(src, 0, 0, c.width, c.height);

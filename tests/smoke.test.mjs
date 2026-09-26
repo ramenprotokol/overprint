@@ -21,7 +21,7 @@ test('every local asset referenced by index.html exists', () => {
   const refs = [...html.matchAll(/(?:src|href)="([^"#]+)"/g)].map((m) => m[1]).filter((u) => !/^https?:/.test(u));
   assert.ok(refs.length >= 4, `found ${refs.length} refs`);
   for (const r of refs) assert.ok(existsSync(join(dist, r)), `missing ${r}`);
-  for (const f of ['reference.js', 'params.js', 'sample.js', 'styles.css', '_headers']) {
+  for (const f of ['reference.js', 'params.js', 'sample.js', 'intake.js', 'styles.css', '_headers']) {
     assert.ok(existsSync(join(dist, f)), `missing ${f}`);
   }
 });

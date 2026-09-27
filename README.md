@@ -92,9 +92,9 @@ npm test          # cargo test, then npm run build, then node --test tests/*.tes
 
 ## Cloudflare (free tier, static only)
 
-`dist/` is about ten static files, including one ~36 KiB `.wasm`. No Worker, KV, D1 or server code, and no API calls of any kind. That sits well inside Cloudflare Pages' free static-asset limits (unlimited requests, 20,000 files per site, 25 MiB per file).
+`dist/` is 12 static files, including one ~36 KiB `.wasm`. No Worker, KV, D1 or server code, and no API calls of any kind. That sits well inside Cloudflare Pages' free static-asset limits (unlimited requests, 20,000 files per site, 25 MiB per file).
 
-It is **deploy-ready, not deployed**. To deploy, build locally, then upload `dist/` directly:
+To deploy your own copy, build locally, then upload `dist/` directly:
 
 ```sh
 npm run build

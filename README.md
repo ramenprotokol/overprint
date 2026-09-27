@@ -2,6 +2,8 @@
 
 Turn any photo into a two-ink risograph-style print, right in your browser.
 
+**Live:** https://overprint-1iy.pages.dev
+
 ![overprint: a sample poster (a sun, a blue disc, hills and headline bars) printed in fluorescent pink and blue with visible grain, lying on the table with registration and crop marks, next to the job ticket](docs/screenshot.png)
 
 overprint splits a photo into two spot-ink plates, dithers each plate into dots, knocks the second plate slightly out of register, adds ink grain, and overprints the two inks on paper, multiplying them the way real transparent ink does. All the image processing is Rust compiled to WebAssembly. Your photo never leaves the device.

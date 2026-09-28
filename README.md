@@ -81,14 +81,15 @@ npm test          # cargo test, then npm run build, then node --test tests/*.tes
 - **Browser** (`tests/browser.test.mjs`) runs real headless Chrome through the DevTools protocol against `dist/`, served with the production headers. It checks:
   - the page renders with the WebAssembly engine, starting on the sample poster at 400 dots, 2 screen pixels per dot at 1280 × 800
   - the in-page race finds identical output
-  - a text file, a corrupt PNG, an SVG and a 200-megapixel PNG header all produce clear messages, and the print stays
+  - a text file, a corrupt PNG, an SVG, a 200-megapixel PNG header, a GIF with a 1 × 1 screen and a 108-megapixel first frame, and an AVIF that states no size all produce clear messages, and the print stays
+  - a real JPEG (encoded by the browser) and a real GIF still load
   - the Archivo and IBM Plex Mono faces load from the site's own `fonts/` folder, and no request goes to any other origin
   - there are no console errors, CSP violations or uncaught exceptions
   - there is no horizontal scroll at 400 px, in both themes
 
   The test skips if Chrome is not found; set `CHROME_PATH` to point at one. **In CI, set `REQUIRE_BROWSER=1`**: then a missing Chrome fails the run instead of skipping (`tests/browser-flag.test.mjs` checks both behaviours).
 - **Page logic** runs in Node without a browser:
-  - `tests/intake.test.mjs`: format sniffing, the SVG message, the 100-megapixel cap and the working-copy size
+  - `tests/intake.test.mjs`: format and size sniffing, including files built to hide their size (a GIF whose first frame is bigger than its screen, a JPEG with its frame header behind 5 × 64 KB of metadata, AVIF and HEIC sizes from their `ispe` boxes), the read budget, the SVG message, the 100-megapixel cap and the working-copy size
   - `tests/sizes.test.mjs`: the export sizes quoted above, and whole-pixel preview scaling
   - `tests/contrast.test.mjs`: text colours reach WCAG AA (4.5:1) in both rooms, read straight from `styles.css`
   - `tests/fonts.test.mjs`: `dist/` names no Google Fonts host, the CSP allows styles and fonts from the site only, and every `@font-face` points at a WOFF2 file that ships in `dist/fonts/`
@@ -132,8 +133,14 @@ No long cache lifetime is set: `app.js`, `pkg/overprint.js` and `pkg/overprint_b
 - **Rendering runs on the main thread.** It is quick at these sizes (the page shows the measured time for each print), but larger outputs would want a Web Worker.
 - **Whole-pixel preview needs room.** On a phone with 2 screen pixels per CSS pixel, 400 dots cannot fit at a whole number of pixels per dot without shrinking the print to about half the screen, so the preview fits the space instead and the dots are drawn 1–2 pixels wide.
 - **Large or unusual images:**
-  - Before decoding, the page reads the file's first bytes to find its real format and, for PNG, JPEG, GIF, WebP and BMP, its size in pixels. Files over 80 MB or 100 megapixels are refused with a message that gives the numbers.
-  - If a JPEG's size is buried beyond the first 256 KB, it is decoded first and then checked against the same cap.
+  - Before decoding, the page reads the file in small pieces to find its real format and its size in pixels. Files over 80 MB or 100 megapixels are refused with a message that gives the numbers. Where the size comes from:
+    - PNG, WebP and BMP: the header.
+    - GIF: the larger of the logical screen and the first frame. Browsers decode the first frame at that size, so a GIF can claim 1 × 1 and hold a 23,000 × 23,000 frame.
+    - JPEG: the frame header, found by walking the metadata segments before it, however far into the file they reach.
+    - AVIF and HEIC: the `ispe` (image size) boxes in the file's metadata. The largest one counts.
+  - That reading stops after 1,024 reads or 2 MB in all, so a crafted file cannot keep the page reading. If the page recognises the format but cannot find the size within that budget, or the file does not state one, it refuses the file instead of decoding it blind.
+  - Files in other formats go to the browser's decoder and are checked against the same cap straight after decoding.
+  - The check reads what each file declares. A file whose compressed picture is larger than its own header says (for example an AVIF whose image data is bigger than its `ispe` box) is not caught before decoding.
   - Each photo is decoded once, drawn into a working copy no bigger than 900 px on the long edge (the largest dot count), and the full-size decode is released straight away.
   - SVG drawings are not supported; the page says so and asks for a photo (JPEG, PNG or WebP).
   - Some browsers cannot open HEIC; if the file really is HEIC, the page says so and suggests saving it as JPEG.

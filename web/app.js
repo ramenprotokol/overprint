@@ -5,7 +5,7 @@ import init, { render as wasmRender, prepare } from './pkg/overprint.js';
 import * as ref from './reference.js';
 import { PRESETS, PAPER, encodeParams, toHex, exportSize, fitPreview } from './params.js';
 import { makeSample } from './sample.js';
-import { HEAD_BYTES, precheck, sniffImage, pixelProblem, decodeFailure, workingSize } from './intake.js';
+import { checkFile, pixelProblem, decodeFailure, workingSize } from './intake.js';
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -255,11 +255,9 @@ async function loadFile(file) {
   clearError();
   if (!file) return;
   const token = ++loadToken;
-  let head = new Uint8Array(0);
-  try {
-    head = new Uint8Array(await file.slice(0, HEAD_BYTES).arrayBuffer());
-  } catch { /* unreadable: the decode below reports it */ }
-  const problem = precheck(file, head);
+  // Format and pixel size, read in small bounded pieces before any decoding.
+  const { format, problem } = await checkFile(file);
+  if (token !== loadToken) return; // another file (or the sample) came in meanwhile
   if (problem) {
     showError(problem);
     return;
@@ -268,7 +266,7 @@ async function loadFile(file) {
   try {
     bitmap = await createImageBitmap(file);
   } catch {
-    if (token === loadToken) showError(decodeFailure(file.name, sniffImage(head).format));
+    if (token === loadToken) showError(decodeFailure(file.name, format));
     return;
   }
   const { width, height } = bitmap;

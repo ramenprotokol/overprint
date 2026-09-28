@@ -49,6 +49,15 @@ const DROP = (name, body, type) => `(() => {
 // A PNG header claiming 20,000 × 10,000 px (200 megapixels) and nothing else.
 const HUGE_PNG = [0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82,
   0, 0, 0x4e, 0x20, 0, 0, 0x27, 0x10, 8, 6, 0, 0, 0];
+// A GIF whose logical screen is 1 × 1 but whose first frame is 12,000 × 9,000
+// (108 megapixels): the page must read the frame, not just the screen.
+const SNEAKY_GIF = [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0, 0, 0,
+  0x21, 0xf9, 4, 0, 0, 0, 0, 0,
+  0x2c, 0, 0, 0, 0, 0xe0, 0x2e, 0x28, 0x23, 0, 2, 2, 0x4c, 0x01, 0, 0x3b];
+// An AVIF that names no size (no 'ispe' box): refused rather than decoded blind.
+const box = (type, body) => [...[24, 16, 8, 0].map((s) => ((8 + body.length) >>> s) & 255), ...[...type].map((c) => c.charCodeAt(0)), ...body];
+const NO_SIZE_AVIF = [...box('ftyp', [...'avif\0\0\0\0mif1'].map((c) => c.charCodeAt(0))),
+  ...box('meta', [0, 0, 0, 0, ...box('iprp', box('ipco', box('av1C', [0x81, 0, 0x0c, 0])))])];
 const SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10"/></svg>';
 const errorText = "document.getElementById('error').textContent";
 
@@ -110,8 +119,35 @@ test('dist/ loads in headless Chrome, renders with WebAssembly, and survives bad
     await page.evaluate(DROP('scan.png', HUGE_PNG, 'image/png'));
     await page.waitFor(`${errorText}.includes('megapixels')`);
     assert.match(await page.evaluate(errorText), /20,000 × 10,000 px \(200 megapixels\)/);
+    await page.evaluate(DROP('tiny.gif', SNEAKY_GIF, 'image/gif'));
+    await page.waitFor(`${errorText}.includes('12,000')`);
+    assert.match(await page.evaluate(errorText), /12,000 × 9,000 px \(108 megapixels\)/);
+    await page.evaluate(DROP('photo.avif', NO_SIZE_AVIF, 'image/avif'));
+    await page.waitFor(`${errorText}.includes('photo.avif')`);
+    assert.match(await page.evaluate(errorText), /Couldn’t find the size of “photo\.avif” \(AVIF\)/);
     assert.equal(await page.evaluate('document.documentElement.dataset.state'), 'rendered');
     assert.match(await page.evaluate("document.getElementById('source-meta').textContent"), /Sample poster/, 'the print stays');
+
+    // Real photos still go through: a JPEG the browser encodes itself, and a valid 1 × 1 GIF.
+    await page.evaluate(`(async () => {
+      const c = document.createElement('canvas');
+      c.width = 640; c.height = 480;
+      const g = c.getContext('2d');
+      g.fillStyle = '#c33'; g.fillRect(0, 0, 640, 480); g.fillStyle = '#39c'; g.fillRect(100, 80, 300, 200);
+      const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.9));
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], 'real.jpg', { type: 'image/jpeg' }));
+      window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, cancelable: true }));
+      return true;
+    })()`);
+    await page.waitFor("document.getElementById('source-meta').textContent.startsWith('real.jpg')");
+    assert.equal(await page.evaluate("document.getElementById('source-meta').textContent"), 'real.jpg · 640 × 480 px');
+    assert.equal(await page.evaluate("document.getElementById('error').hidden"), true);
+    await page.evaluate(DROP('dot.gif', [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0, 0x80, 0, 0, 0xff, 0xff, 0xff, 0, 0, 0,
+      0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 2, 0x44, 0x01, 0, 0x3b], 'image/gif'));
+    await page.waitFor("document.getElementById('source-meta').textContent.startsWith('dot.gif')");
+    assert.equal(await page.evaluate("document.getElementById('source-meta').textContent"), 'dot.gif · 1 × 1 px');
+    await page.waitFor("document.documentElement.dataset.state === 'rendered'");
 
     assert.equal(await page.evaluate('document.documentElement.dataset.errors'), '0');
     assert.deepEqual(await page.evaluate(OFF_ORIGIN), [], 'requests left the site');

@@ -28,7 +28,7 @@ function fail(msg) {
 }
 
 if (!has('cargo')) fail('cargo not found. Install Rust (rustup) and add it to PATH.');
-if (!has('wasm-bindgen')) fail('wasm-bindgen not found. Run: cargo install wasm-bindgen-cli --version 0.2.129');
+if (!has('wasm-bindgen')) fail('wasm-bindgen not found. Run: cargo install --locked wasm-bindgen-cli --version 0.2.129');
 
 const cargoToml = readFileSync(join(root, 'Cargo.toml'), 'utf8');
 const want = /wasm-bindgen = "=([\d.]+)"/.exec(cargoToml)?.[1];
@@ -38,7 +38,7 @@ if (want && cli !== want) fail(`wasm-bindgen CLI is ${cli} but Cargo.toml pins $
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(pkg, { recursive: true });
 
-run('cargo', ['build', '--release', '--target', 'wasm32-unknown-unknown']);
+run('cargo', ['build', '--locked', '--release', '--target', 'wasm32-unknown-unknown']);
 const wasmIn = join(root, 'target', 'wasm32-unknown-unknown', 'release', 'overprint.wasm');
 run('wasm-bindgen', [wasmIn, '--target', 'web', '--out-dir', pkg, '--no-typescript']);
 

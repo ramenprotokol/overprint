@@ -49,7 +49,7 @@ Requirements:
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cargo install wasm-bindgen-cli --version 0.2.129
+cargo install --locked wasm-bindgen-cli --version 0.2.129
 
 npm run build     # compiles Rust -> wasm, generates bindings, copies web/ -> dist/
 npm run serve     # preview dist/ at http://127.0.0.1:8080 (serves the production _headers too)

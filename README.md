@@ -140,7 +140,7 @@ No long cache lifetime is set: `app.js`, `pkg/overprint.js` and `pkg/overprint_b
     - AVIF and HEIC: the `ispe` (image size) boxes in the file's metadata. The largest one counts.
   - That reading stops after 1,024 reads or 2 MB in all, so a crafted file cannot keep the page reading. If the page recognises the format but cannot find the size within that budget, or the file does not state one, it refuses the file instead of decoding it blind.
   - Files in other formats go to the browser's decoder and are checked against the same cap straight after decoding.
-  - The check reads what each file declares. A file whose compressed picture is larger than its own header says (for example an AVIF whose image data is bigger than its `ispe` box) is not caught before decoding.
+  - The check reads what each file declares in the places above, so it does not catch a picture that is bigger than those say. Examples: an AVIF whose image data is bigger than its `ispe` box, an AVIF grid whose tiles cover more than the grid's own `ispe`, or an animated AVIF whose frames are bigger than its still image. The browser starts decoding such a file at its real size.
   - Each photo is decoded once, drawn into a working copy no bigger than 900 px on the long edge (the largest dot count), and the full-size decode is released straight away.
   - SVG drawings are not supported; the page says so and asks for a photo (JPEG, PNG or WebP).
   - Some browsers cannot open HEIC; if the file really is HEIC, the page says so and suggests saving it as JPEG.

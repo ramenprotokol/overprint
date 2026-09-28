@@ -3,7 +3,7 @@
 // shipped .wasm (read from the module's name section).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { dist, root } from './helpers.mjs';
 
@@ -63,8 +63,21 @@ test('the notices name the exact wasm-bindgen version and carry the licence text
   assert.match(text, /^dlmalloc \d+\.\d+\.\d+$/m);
   assert.match(text, /Permission is hereby granted, free of charge/);
   assert.match(text, /UNICODE LICENSE V3/);
-  assert.match(text, /Google Fonts[\s\S]*SIL Open Font License 1\.1/);
   assert.doesNotMatch(text, /\/Users\/|\/home\//, 'no local paths');
+});
+
+test('the notices cover each self-hosted typeface: files, version, copyright line and the OFL text', () => {
+  const text = read();
+  assert.match(text, /^Archivo 2\.001$/m);
+  assert.match(text, /^IBM Plex Mono 2\.005$/m);
+  assert.match(text, /Copyright 2020 The Archivo Project Authors/);
+  assert.match(text, /Copyright © 2017 IBM Corp\. with Reserved Font Name "Plex"/);
+  assert.match(text, /SIL OPEN FONT LICENSE Version 1\.1/);
+  assert.match(text, /PERMISSION & CONDITIONS/);
+  assert.equal(text.match(/SIL OPEN FONT LICENSE Version 1\.1/g).length, 1, 'the OFL text appears once');
+  assert.ok(existsSync(join(dist, 'fonts')), 'dist/fonts/ is missing');
+  for (const f of readdirSync(join(dist, 'fonts'))) assert.ok(text.includes(`fonts/${f}`), `fonts/${f} has no notice`);
+  assert.doesNotMatch(text, /loaded from Google Fonts|fonts\.googleapis\.com|fonts\.gstatic\.com/);
 });
 
 test('every crate compiled into the .wasm has a notice', (t) => {

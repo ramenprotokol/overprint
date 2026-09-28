@@ -18,8 +18,23 @@ if (plan.fail) {
   test('browser smoke test can run', () => assert.fail(plan.fail));
 }
 
-// Web fonts come from a third party; if the machine is offline that is not an app error.
-const appProblems = (list) => list.filter((p) => !/fonts\.(googleapis|gstatic)\.com/.test(`${p.text} ${p.url ?? ''}`));
+// Every request the page made, other than inline data: URLs, is to this server.
+const OFF_ORIGIN = `performance.getEntriesByType('resource').map((e) => e.name)
+  .filter((u) => !u.startsWith('data:') && new URL(u).origin !== location.origin)`;
+
+// The self-hosted faces load (under the production CSP) and are ready to draw.
+// document.fonts.load() rejects if a file is blocked or broken, and resolves
+// with the faces it loaded; check() is then true for each descriptor.
+const FACES = `(async () => {
+  await document.fonts.ready;
+  const out = {};
+  for (const d of ['400 16px Archivo', '700 16px Archivo', '400 12px "IBM Plex Mono"', '500 12px "IBM Plex Mono"']) {
+    const loaded = await document.fonts.load(d);
+    out[d] = { faces: loaded.filter((f) => f.status === 'loaded').length, check: document.fonts.check(d) };
+  }
+  out.files = performance.getEntriesByType('resource').map((e) => new URL(e.name).pathname).filter((p) => p.endsWith('.woff2')).sort();
+  return out;
+})()`;
 
 // body is a string, or an array of byte values.
 const DROP = (name, body, type) => `(() => {
@@ -46,6 +61,15 @@ test('dist/ loads in headless Chrome, renders with WebAssembly, and survives bad
     await page.navigate(url);
     await page.waitFor("document.documentElement.dataset.state === 'rendered'");
     assert.equal(await page.evaluate('document.documentElement.dataset.engine'), 'wasm');
+
+    // Fonts come from this site: nothing is fetched from anywhere else.
+    const faces = await page.evaluate(FACES);
+    assert.deepEqual(await page.evaluate(OFF_ORIGIN), [], 'requests left the site');
+    for (const [d, r] of Object.entries(faces)) {
+      if (d === 'files') continue;
+      assert.ok(r.faces >= 1 && r.check, `${d} did not load from a self-hosted face: ${JSON.stringify(r)}`);
+    }
+    assert.deepEqual(faces.files, ['/fonts/archivo-variable.woff2', '/fonts/ibm-plex-mono-400.woff2', '/fonts/ibm-plex-mono-500.woff2']);
 
     // First view: the sample poster at 400 dots, drawn at whole device pixels per dot.
     const first = await page.evaluate(`(() => {
@@ -90,7 +114,8 @@ test('dist/ loads in headless Chrome, renders with WebAssembly, and survives bad
     assert.match(await page.evaluate("document.getElementById('source-meta').textContent"), /Sample poster/, 'the print stays');
 
     assert.equal(await page.evaluate('document.documentElement.dataset.errors'), '0');
-    assert.deepEqual(appProblems(page.problems), []);
+    assert.deepEqual(await page.evaluate(OFF_ORIGIN), [], 'requests left the site');
+    assert.deepEqual(page.problems, [], 'console errors, CSP violations or exceptions');
     await page.close();
 
     // Phone width: no horizontal scroll, no errors, in the darkroom theme too.
@@ -100,7 +125,8 @@ test('dist/ loads in headless Chrome, renders with WebAssembly, and survives bad
       await phone.waitFor("document.documentElement.dataset.state === 'rendered'");
       const { sw, vw } = await phone.evaluate('({ sw: document.documentElement.scrollWidth, vw: innerWidth })');
       assert.ok(sw <= vw, `${scheme}: page is ${sw}px wide in a ${vw}px viewport`);
-      assert.deepEqual(appProblems(phone.problems), []);
+      assert.deepEqual(await phone.evaluate(OFF_ORIGIN), [], `${scheme}: requests left the site`);
+      assert.deepEqual(phone.problems, [], `${scheme}: console errors, CSP violations or exceptions`);
       await phone.close();
     }
   } finally {

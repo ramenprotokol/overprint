@@ -3,6 +3,32 @@
    same colour the engine uses for paper), the key ink for type and rules.
    The two spot inks are the only saturated colours on the page. */
 
+/* Both typefaces ship with the site (fonts/, SIL Open Font License 1.1; see
+   THIRD-PARTY-NOTICES.txt), so a visit asks no third party for anything.
+   Archivo is one variable file (width and weight axes); Latin subsets only. */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 300 700;
+  font-stretch: 62% 125%;
+  font-display: swap;
+  src: url(fonts/archivo-variable.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-400.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url(fonts/ibm-plex-mono-500.woff2) format('woff2');
+}
+
 :root {
   --table: #e9e5db;
   --sheet: #f4f0e6;

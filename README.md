@@ -82,7 +82,8 @@ npm test          # cargo test, then npm run build, then node --test tests/*.tes
   - the page renders with the WebAssembly engine, starting on the sample poster at 400 dots, 2 screen pixels per dot at 1280 × 800
   - the in-page race finds identical output
   - a text file, a corrupt PNG, an SVG and a 200-megapixel PNG header all produce clear messages, and the print stays
-  - there are no console errors or uncaught exceptions
+  - the Archivo and IBM Plex Mono faces load from the site's own `fonts/` folder, and no request goes to any other origin
+  - there are no console errors, CSP violations or uncaught exceptions
   - there is no horizontal scroll at 400 px, in both themes
 
   The test skips if Chrome is not found; set `CHROME_PATH` to point at one. **In CI, set `REQUIRE_BROWSER=1`**: then a missing Chrome fails the run instead of skipping (`tests/browser-flag.test.mjs` checks both behaviours).
@@ -90,11 +91,12 @@ npm test          # cargo test, then npm run build, then node --test tests/*.tes
   - `tests/intake.test.mjs`: format sniffing, the SVG message, the 100-megapixel cap and the working-copy size
   - `tests/sizes.test.mjs`: the export sizes quoted above, and whole-pixel preview scaling
   - `tests/contrast.test.mjs`: text colours reach WCAG AA (4.5:1) in both rooms, read straight from `styles.css`
-- **Third-party notices** (`tests/notices.test.mjs`): `dist/THIRD-PARTY-NOTICES.txt` exists, the colophon links to it, it names the exact `wasm-bindgen` version from `Cargo.lock`, and every crate whose code is inside the shipped `.wasm` (read from its name section) has an entry
+  - `tests/fonts.test.mjs`: `dist/` names no Google Fonts host, the CSP allows styles and fonts from the site only, and every `@font-face` points at a WOFF2 file that ships in `dist/fonts/`
+- **Third-party notices** (`tests/notices.test.mjs`): `dist/THIRD-PARTY-NOTICES.txt` exists, the colophon links to it, it names the exact `wasm-bindgen` version from `Cargo.lock`, every crate whose code is inside the shipped `.wasm` (read from its name section) has an entry, and every font file has one too, with its copyright line and the OFL text
 
 ## Cloudflare (free tier, static only)
 
-`dist/` is 12 static files, including one ~36 KiB `.wasm`. No Worker, KV, D1 or server code, and no API calls of any kind. That sits well inside Cloudflare Pages' free static-asset limits (unlimited requests, 20,000 files per site, 25 MiB per file).
+`dist/` is 15 static files, including one ~36 KiB `.wasm` and three WOFF2 font files (about 125 KB together). No Worker, KV, D1 or server code, and no API calls of any kind. That sits well inside Cloudflare Pages' free static-asset limits (unlimited requests, 20,000 files per site, 25 MiB per file).
 
 To deploy your own copy, build locally, then upload `dist/` directly:
 
@@ -107,17 +109,17 @@ There is deliberately no `npm run deploy` script and no `account_id` in `wrangle
 
 Direct upload is the intended path, because Pages' own build image is not assumed to have Rust and wasm-bindgen installed. `dist/_headers` sets:
 
-- a strict Content-Security-Policy (`script-src 'self' 'wasm-unsafe-eval'`, no inline scripts or styles)
+- a strict Content-Security-Policy (`script-src 'self' 'wasm-unsafe-eval'`, `style-src 'self'`, `font-src 'self'`: no inline scripts or styles, and no third-party hosts)
 - `nosniff`
 - `no-referrer`
 - a locked-down Permissions-Policy
 
-No long cache lifetime is set: `app.js`, `pkg/overprint.js` and `pkg/overprint_bg.wasm` keep fixed names, so a `max-age` could pair a fresh `app.js` with a stale engine after a redeploy. Pages' default (revalidate every time) avoids that.
+No long cache lifetime is set: `app.js`, `pkg/overprint.js` and `pkg/overprint_bg.wasm` keep fixed names (so do the font files), so a `max-age` could pair a fresh `app.js` with a stale engine after a redeploy. Pages' default (revalidate every time) avoids that.
 
 ## Privacy
 
 - No uploads, no analytics, no cookies.
-- The only third-party request is Google Fonts (Archivo and IBM Plex Mono). If it fails, the page falls back to system fonts.
+- No third-party requests at all. The Archivo and IBM Plex Mono typefaces ship with the site (`web/fonts/`), and the Content-Security-Policy only allows scripts, styles and fonts from the site itself.
 - `localStorage` holds a single value: your Light room / Darkroom choice.
 
 ## Honest limitations
@@ -149,13 +151,14 @@ No long cache lifetime is set: `app.js`, `pkg/overprint.js` and `pkg/overprint_b
 
 Built by Ramen Protocol with AI assistance (Claude). overprint is independent and not affiliated with any printer or ink maker. "Risograph-style" only describes the look.
 
-The `.wasm` file contains third-party code, so `npm run build` writes `dist/THIRD-PARTY-NOTICES.txt`, linked from the page's colophon. `scripts/notices.mjs` generates it from the exact versions that were compiled: licence texts come from each crate's own source in the Cargo registry, and from the Rust toolchain's own licence files. It covers:
+The `.wasm` file contains third-party code and the site ships two typefaces, so `npm run build` writes `dist/THIRD-PARTY-NOTICES.txt`, linked from the page's colophon. `scripts/notices.mjs` generates it from the exact versions that were compiled: licence texts come from each crate's own source in the Cargo registry, and from the Rust toolchain's own licence files. It covers:
 
 - the Rust standard library (`core`, `alloc`, `std`; MIT OR Apache-2.0, with Unicode-3.0 data tables in `core`) and `dlmalloc`, its allocator on wasm32 (MIT OR Apache-2.0)
 - `wasm-bindgen` (MIT OR Apache-2.0), plus the `pkg/overprint.js` glue that `wasm-bindgen-cli` generates
 - the crates `wasm-bindgen` pulls in for wasm32: `wasm-bindgen-shared`, `cfg-if`, `once_cell` (all MIT OR Apache-2.0) and `unicode-ident` ((MIT OR Apache-2.0) AND Unicode-3.0)
+- the typefaces in `dist/fonts/`, both under the SIL Open Font License 1.1: **Archivo** 2.001 (one variable Latin-subset WOFF2, as served by Google Fonts) and **IBM Plex Mono** 2.005 Regular and Medium (IBM's own Latin-1 WOFF2 files from `@ibm/plex-mono` 2.5.0). Their copyright lines and licence text come from `licenses/`, and the build fails on any font file the notices do not list.
 
-Proc-macro and build-script crates (`syn`, `quote`, `proc-macro2` and others) only run on the build machine, so nothing from them ships. The Archivo and IBM Plex Mono typefaces are loaded from Google Fonts rather than shipped, and both are under the SIL Open Font License 1.1.
+Proc-macro and build-script crates (`syn`, `quote`, `proc-macro2` and others) only run on the build machine, so nothing from them ships.
 
 ## License
 

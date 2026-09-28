@@ -25,3 +25,6 @@ __pycache__/
 
 # Rust
 target/
+
+# Agent state, browser-test output and local Cloudflare state — never commit
+ .claude/ .codex/ .specstory/ .playwright-mcp/ .playwright-cli/ test-results/ playwright-report/
